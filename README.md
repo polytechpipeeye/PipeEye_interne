@@ -12,9 +12,22 @@ Anneau LED : Neopixel Ring 12 LEDs\
 Moteurs : Micro Servo Motors 9g 360deg\
 Convertisseur DC-DC (12V -> 5V) : DFR0571\
 Level Shifter (3.3V -> 5V) : BOB12009\
-Camera : Caméra 8 Mpx CAM-JT-V2-77
+Camera : Caméra 8 Mpx CAM-JT-V2-77\
+Manette de contrôle: PS4 Dualshock
 
 ## Compilation et lancement du projet
 ```bash
 ./run_robot.sh
 ```
+
+## Manipulations sur la manette PS4
+**Anneau LED :** \
+*Quart de l'anneau :* boutons d'orientation à gauche\ 
+*Intensité lumineuse :* le bouton R1\
+
+**Moteurs :** \
+*Moteur PAN :* joystick à la droite\
+*Moteur TILT :* joystick à la gauche\
+*Vitesse :* bouton triangle
+
+
