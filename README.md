@@ -13,3 +13,8 @@ Moteurs : Micro Servo Motors 9g 360deg\
 Convertisseur DC-DC (12V -> 5V) : DFR0571\
 Level Shifter (3.3V -> 5V) : BOB12009\
 Camera : Caméra 8 Mpx CAM-JT-V2-77
+
+## Compilation et lancement du projet
+```bash
+./run_robot.sh
+```
