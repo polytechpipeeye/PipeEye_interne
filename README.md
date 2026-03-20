@@ -23,7 +23,7 @@ Manette de contrôle: PS4 Dualshock
 ## Manipulations sur la manette PS4
 **Anneau LED :** \
 *Quart de l'anneau :* boutons d'orientation à gauche\
-*Intensité lumineuse :* bouton R1\
+*Intensité lumineuse :* bouton R1
 
 **Moteurs :** \
 *Moteur PAN :* joystick à la droite\
