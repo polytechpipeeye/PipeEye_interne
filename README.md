@@ -8,8 +8,8 @@ Celui-ci consiste à concevoir, réaliser et intégrer une caméra (PAN/TILT) em
 Le projet s'intègre sur un environnement ROS2 Iron sur Ubuntu 22.04 et le tout modulé sur une carte Raspberry Pi 4B.
 
 ## Composants utilisés
-Anneau LED : Neopixel Ring 12 LEDs
-Moteurs : Micro Servo Motors 9g 360deg
-Convertisseur DC-DC (12V -> 5V) : DFR0571
+Anneau LED : Neopixel Ring 12 LEDs\
+Moteurs : Micro Servo Motors 9g 360deg\
+Convertisseur DC-DC (12V -> 5V) : DFR0571\
 Level Shifter (3.3V -> 5V) : BOB12009
 Camera : 
