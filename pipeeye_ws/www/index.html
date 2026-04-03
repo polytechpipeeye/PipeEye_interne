@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PipeEye Pilote</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        img { width: 100vw; height: 100vh; object-fit: contain; 
+        image-rendering: auto;
+        }
+    </style>
+</head>
+<body>
+    <img id="video-stream" src="" alt="En attente du signal vidéo..." />
+
+    <script>
+        var robot_ip = window.location.hostname;
+        var video_url = "http://" + robot_ip + ":8080/stream?topic=/camera/image_hud&quality=50";
+        document.getElementById('video-stream').src = video_url;
+    </script>
+</body>
+</html>

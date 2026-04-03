@@ -3,7 +3,7 @@ import neopixel
 import time
 
 # Test direct sur GPIO 12 (Pin 32)
-pixels = neopixel.NeoPixel(board.D18, 18)
+pixels = neopixel.NeoPixel(board.D12, 12)
 
 while True:
     print("Test Allumage Rouge...")

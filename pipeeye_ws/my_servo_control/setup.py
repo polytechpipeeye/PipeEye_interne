@@ -23,7 +23,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-        	#'camera_node = my_servo_control.camera_node:main',
+        	'camera_node = my_servo_control.camera_node:main',
         	'neopixel_test = my_servo_control.neopixel_test:main',
         	'right_stick_publisher = my_servo_control.right_stick_publisher:main',
 		'right_stick_listener = my_servo_control.right_stick_listener:main',
