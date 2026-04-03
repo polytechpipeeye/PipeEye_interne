@@ -57,7 +57,7 @@ def generate_launch_description():
 '''
     # --- ASSEMBLAGE ---
     return LaunchDescription([
-        joy_pub,
+        #joy_pub,
         servo_sub,
         led_sub,
         joy_listener,
