@@ -67,8 +67,6 @@ cd ros2_ws
 ./run_robot.sh
 
 Étape 3 : Lancement du contrôle (Sur le poste opérateur)
-Ouvrez un nouveau terminal local sur votre poste opérateur (celui où la manette est branchée) et lancez l'écoute de la manette via l'alias préconfiguré :
-
-manette
+Ouvrez un nouveau terminal local sur votre poste opérateur (celui où la manette est branchée) et lancez l'écoute de la manette via l'alias préconfiguré : manette
 
 Le système est désormais en ligne ! Vous pouvez ouvrir votre navigateur et vous rendre sur http://10.10.10.1:8081 pour avoir l'interface vidéo pour commencer l'inspection.
