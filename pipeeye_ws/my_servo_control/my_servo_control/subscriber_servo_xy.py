@@ -4,8 +4,8 @@ from geometry_msgs.msg import Vector3
 import RPi.GPIO as G
 import time
 
-servo_pin_x=22
-servo_pin_y=23
+servo_pin_x=23
+servo_pin_y=22
 G.setmode(G.BCM)
 G.setup(servo_pin_x, G.OUT)
 G.setup(servo_pin_y, G.OUT)
@@ -17,16 +17,16 @@ stop=7.0
 duree_max=3.0  # secondes max dans le même sens
 # Vitesse axe X
 VX={
-    1: {"gauche": 3.0,  "droite": 10.5},
-    2: {"gauche": 2.5,  "droite": 11.0},
-    3: {"gauche": 2.0,  "droite": 11.5},
+    1: {"gauche": 4.5,  "droite": 9.0},
+    2: {"gauche": 4.0,  "droite": 9.5},
+    3: {"gauche": 3.5,  "droite": 10.0},
 }
 
 # Vitesse axe Y
 VY={
-    1: {"gauche": 9.5,  "droite": 4.0},
-    2: {"gauche": 10.0,  "droite": 3.5},
-    3: {"gauche": 11.0, "droite": 2.5},
+    1: {"gauche": 9.0,  "droite": 4.5},
+    2: {"gauche": 9.5,  "droite": 4.0},
+    3: {"gauche": 10.5, "droite": 3.0},
 }
 class ServoSubscriber(Node):
     def __init__(self):
@@ -99,6 +99,7 @@ class ServoSubscriber(Node):
         self.get_logger().info(
             f"[CMD] x:{msg._x} y:{msg._y} vitesse:{self.vitesse}"
         )
+        time.sleep(0.02)
 
     def watchdog_timer(self):
         now=time.monotonic()
@@ -108,14 +109,17 @@ class ServoSubscriber(Node):
                 self.butee_x=True
                 self.dir_butee_x=self.dir_x
                 pwm_x.ChangeDutyCycle(stop)
-                self.get_logger().warn(f"[BUTEE]AXE X atteinte à {elapsed:.2f}s ({self.dir_x})")
+                self.get_logger().warn(f"[BUTEE] AXE X atteinte à {elapsed:.2f}s ({self.dir_x})")
         if self.start_time_y and not self.butee_y:
             elapsed=now-self.start_time_y
             if elapsed >= duree_max:
                 self.butee_y=True
                 self.dir_butee_y=self.dir_y
                 pwm_y.ChangeDutyCycle(stop)
-                self.get_logger().warn(f"[BUTEE] AXE Y atteinte à {elapsed:.2f}s ({self.dir_y})")
+                if self.dir_y=="droite":
+                	self.get_logger().warn(f"[BUTEE] AXE Y atteinte à {elapsed:.2f}s (bas)")
+                if self.dir_y=="gauche":
+                	self.get_logger().warn(f"[BUTEE] AXE Y atteinte à {elapsed:.2f}s (haut)")
 
     def apply_pwm(self):
 

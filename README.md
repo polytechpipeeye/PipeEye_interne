@@ -23,7 +23,7 @@ Le projet repose sur une architecture distribuée moderne :
 ##  Architecture du Projet
 Le code source est organisé dans un workspace ROS 2 (`ros2_ws`) structuré de la manière suivante :
 
-```text
+
 ├── ros2_ws/
 │   ├── hud_camera_cpp/           # Paquet C++ : Traitement d'image (Viseur, HUD, Zoom)
 │   ├── my_robot_interface/       # Paquet de messages personnalisés (ex: LedControl.msg)

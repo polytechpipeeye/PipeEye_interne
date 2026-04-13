@@ -101,7 +101,6 @@ manette(){
 }
 
 
-
 Mettre à jour le terminal actuel pour prendre en compte la modification :
 
 source ~/.bashrc
