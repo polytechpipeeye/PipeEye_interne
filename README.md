@@ -23,7 +23,7 @@ Le projet repose sur une architecture distribuée moderne :
 ##  Architecture du Projet
 Le code source est organisé dans un workspace ROS 2 (`ros2_ws`) structuré de la manière suivante :
 
-`
+```text
 ├── ros2_ws/
 │   ├── hud_camera_cpp/           # Paquet C++ : Traitement d'image (Viseur, HUD, Zoom)
 │   ├── my_robot_interface/       # Paquet de messages personnalisés (ex: LedControl.msg)
@@ -32,7 +32,8 @@ Le code source est organisé dans un workspace ROS 2 (`ros2_ws`) structuré de l
 │   │   └── my_servo_control/     # Scripts Python (Manette, Moteurs, NeoPixel...)
 │   ├── www/                      # Dossier contenant l'interface Web (index.html)
 │   ├── run_robot.sh              # Script exécutable d'automatisation du lancement
-└── README.md`
+└── README.md
+```
 
 ## Installation et Lancement
 
@@ -72,4 +73,4 @@ Ouvrez un nouveau terminal local sur votre poste opérateur (celui où la manett
 
 Le système est désormais en ligne ! Vous pouvez ouvrir votre navigateur et vous rendre sur http://10.10.10.1:8081 pour avoir l'interface vidéo pour commencer l'inspection.
 
-Le package manette_pkg et le package contenant les fichier permettant de controler la manette, il est à mettre sur le poste operateur 
+Le package manette_pkg est le package contenant les fichiers permettant de contrôler la manette, il est à mettre sur le poste opérateur 
