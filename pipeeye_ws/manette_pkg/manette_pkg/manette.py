@@ -1,259 +1,196 @@
-#!/usr/bin/env python3
-
-import threading
-import math
 import rclpy
-
 from rclpy.node import Node
+from sensor_msgs.msg import Joy
+from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Vector3
-from my_robot_interface.msg import LedControl # importer msg personnalisé pour la LED
-
-from evdev import InputDevice, categorize, ecodes, list_devices
 from std_msgs.msg import Int8
-from rcl_interfaces.msg import Log
 
-def difference(a, b):
-    # Retourne la différence absolue entre deux valeurs, sert pour le filtrage
-    return abs(a - b)
+# Import du message personnalisé LEDControl
+from my_robot_interface.msg import LedControl 
 
-
-def find_ps4_controller():
-    # récuperer une liste devices depuis list devices
-    devices = [InputDevice(path) for path in list_devices()]
-    for dev in devices:
-        # si dev.name contient "Sony" ou "Wireless", retourner dev
-        if "Wireless" in dev.name or "Sony" in dev.name:
-            return dev
-    return None
-
-
-class RightStickPublisher(Node):
-    """
-    Node ROS2 qui lit le joystick droit (axes ABS_RX, ABS_RY)
-    d'une manette PS4 branchée en USB et publie les valeurs brutes (0 à 255)
-    sur le topic nommé /right_stick sous la forme d'un Vector3 (x = RX, y = RY, z = 0).
-    """
+class MasterTeleopNode(Node):
 
     def __init__(self):
-        super().__init__('stick_publisher') # déclarer noeud nommé stick_publisher
-        self.log_sub=self.create_subscription(Log,"/rosout",self.rosout_callback,10); 
-        # On récupère la manette via evdev
-        gamepad = find_ps4_controller()  # variable locale
-
-        # On vérifie si on a trouvé quelque chose
-        if gamepad is None:
-            self.get_logger().error("Manette PS4 non trouvée. Branche-la en USB et réessaie.") # error print si pas de manette
-            raise SystemExit # sortie du programme
-
-        # on passe la variable locale en variable globale
-        self.gamepad = gamepad
-
-        self.get_logger().info(f"Manette détectée : {self.gamepad.name} sur {self.gamepad.path}") # simple print pour confirmer la connexion avec la manette
-
-        # attributs : valeurs courantes des joysticks (axes RX et LY)
+        super().__init__('master_teleop_node')
         
-        # variables zone morte
-        self.deadzone_radius = 20.0  # Rayon de la zone morte réglable (0 à 127)
-        self.center_val = 127.5      # Centre d'un axe 0-255
+        # --- PUBLISHERS ---
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 1)
+        self.tourelle_pub = self.create_publisher(Vector3, '/right_stick', 1) 
+        self.led_pub = self.create_publisher(LedControl, '/LEDinput', 1)      
+        self.publisher_zoom=self.create_publisher(Int8, 'camera/zoom_cmd', 1)
+        self.screenshot_pub=self.create_publisher(Int8, '/camera/screenshot', 1)
         
-        self.rx = 0.0
-        self.ly = 0.0
-        self.indiceVitesse = 1.0
-        self.indiceLED = 1.0
-        self.flagFlèche = False
-        self.padOldState = 0
+        # subscription au noeud Joy qui envoie les informations analogiques de la dualshock
+        self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
         
-        self.q1 = False
-        self.q2 = False
-        self.q3 = False
-        self.q4 = False
-        #self.is_red=False
-        #self.padOldStateX=0
+        # --- VARIABLES D'ÉTAT TOURELLE---
+        self.indiceVitesse = 1 # indice vitesse des moteurs tourelle
+        self.indiceLED = 1 # indice intensity LED tourelle
         
-        # déclarer un publisher "right_stick" de type Vector3
-        # déclarer un publisher "LEDinput" de type LedControl (personnalisé)
-        self.publisher_ = self.create_publisher(Vector3, 'right_stick', 10)
-        self.publisherLED = self.create_publisher(LedControl, 'LEDinput', 10)
-        self.publisher_zoom=self.create_publisher(Int8, 'camera/zoom_cmd', 10)
-        self.zoom_cmd=0
-        # thread dédié à la lecture bloquante de la manette
-        self.joy_thread = threading.Thread(
-            target=self.joystick_loop,
-            daemon=True
-        )
+        self.q1 = False # Croix
+        self.q2 = False # Rond
+        self.q3 = False # Triangle
+        self.q4 = False # Carré
         
-        self.joy_thread.start() # lancer la méthode à executer
-        self.get_logger().info("Thread de lecture joystick lancé.") # print pour l'annoncer
-        self.get_logger().info(f"Vitesse initiale : {self.indiceVitesse}")
-        self.get_logger().info(f"Indice LED initial : {self.indiceLED}")
+        # memoire
+        self.last_buttons = []
+        self.last_axes = []
+        
+        # --- LOGIQUE DU SWITCH (L2 indice 6) ---
+        self.mode_tourelle = False      # Faux = Moteurs, Vrai = Tourelle
+        self.button_switch = 7          # Index du bouton L2
+        self.switch_press_time = None   # Mémorise l'heure du début de l'appui
+        self.switch_hold_duration = 1.0 # Duree en secondes a maintenir pour basculer
+        self.has_toggled = False        # Sécurité pour ne basculer qu'une seule fois par appui
+        
+        # Paramètres de conduite
+        self.linear_scale = 0.5
+        self.angular_scale = 0.5
+        
+        self.get_logger().info("Publisher at Work")
+        self.last_pub_time=0.0
+        self.last_led_time=0.0
+        self.last_speed_time=0.0
+        self.last_screenshot_time=0.0
+        
 
-    def rosout_callback(self,msg):
-    	if "AXE" in msg.msg :
-    	    print(f":{msg.msg}")
-    	
-    def changeSpeedIndex(self):
-        if self.indiceVitesse == 1:
-            self.indiceVitesse = 2
-        elif self.indiceVitesse == 2:
-            self.indiceVitesse = 3
-        elif self.indiceVitesse == 3:
-            self.indiceVitesse = 1
+
+    def joy_callback(self, msg):
+        current_time = self.get_clock().now().nanoseconds / 1e9 # Temps actuel en secondes
+
+        # GESTION DU SWITCH BLOQUANT (Appui long L2)
+        # Vérifie si le bouton L2 (index 6) est enfoncé
+        is_l2_pressed = (msg.buttons[self.button_switch] == 1)
+
+        if is_l2_pressed:
+            if self.switch_press_time is None:
+                # Début de l'appui
+                self.switch_press_time = current_time
+                self.has_toggled = False
+            else:
+                # On maintient enfoncé, on vérifie si la durée est atteinte
+                elapsed = current_time - self.switch_press_time
+                if elapsed >= self.switch_hold_duration and not self.has_toggled:
+                    # BASCULEMENT !
+                    self.mode_tourelle = not self.mode_tourelle
+                    self.has_toggled = True # Verrouillage pour éviter que ça clignote
+                    
+                    # Arrêt de sécurité immédiat des roues si on passe en mode tourelle
+                    if self.mode_tourelle:
+                        self.cmd_vel_pub.publish(Twist()) 
+                        
+                    self.get_logger().info(f"\n >>> CHANGEMENT DE MODE : {'TOURELLE ' if self.mode_tourelle else 'CONDUITE '} <<<\n")
         else:
-            self.indiceVitesse = 1
-            
-    def changeLEDindex(self):
-        if self.indiceLED == 1:
-            self.indiceLED = 2
-        elif self.indiceLED == 2:
-            self.indiceLED = 3
-        elif self.indiceLED == 3:
-            self.indiceLED = 4
-        elif self.indiceLED == 4:
-            self.indiceLED = 1
-        else:
-            self.indiceLED = 1
+            # On a relâché L2, on réinitialise le chronomètre
+            self.switch_press_time = None
+            self.has_toggled = False
 
-    def joystick_loop(self):
-        """
-        Boucle bloquante exécutée dans un thread séparé.
-        """
-        try:
-            for event in self.gamepad.read_loop():
-            
-                # Filtre : on n'accepte que les axes ou les touches
-                if event.type not in [ecodes.EV_ABS, ecodes.EV_KEY]:
-                    continue
 
-                changed = False
-                
-                # --- BLOC DES BOUTONS ---
+        # GESTION DES BOUTONS
+        if msg.buttons[0] == 1 and self.last_buttons[0] == 0: self.q1 = not self.q1 # Croix
+        if msg.buttons[1] == 1 and self.last_buttons[1] == 0: self.q2 = not self.q2 # Rond
+        if msg.buttons[2] == 1 and self.last_buttons[2] == 0: self.q3 = not self.q3 # Triangle
+        if msg.buttons[3] == 1 and self.last_buttons[3] == 0: self.q4 = not self.q4 # Carré
 
-                # creation et initialisation du message msgLED de type LedControl
-                
-                msgLED = LedControl()
-                msgLED.intensity = int(self.indiceLED)
-                            
-                if event.type == ecodes.EV_KEY:
-                    if event.code == ecodes.BTN_TL: # L1
-                        if event.value==1:
-                            self.zoom_cmd=1
-                        else :
-                            self.zoom_cmd=0
-                        msg_zoom=Int8()
-                        msg_zoom.data=self.zoom_cmd
-                        self.publisher_zoom.publish(msg_zoom)
-                        self.get_logger().info(f"Zoom Activé")
-                    elif event.code == ecodes.BTN_TR2: # R2
-                        if event.value==1:
-                            self.zoom_cmd=-1
-                        else:
-                            self.zoom_cmd=0
-                        msg_zoom=Int8()
-                        msg_zoom.data=self.zoom_cmd
-                        self.publisher_zoom.publish(msg_zoom)
-                        self.get_logger().info(f"Zoom Désactivé")
-                    if event.value == 1: # Appui
-                        button_pressed = True
-                        
-                        if event.code == ecodes.BTN_SOUTH: # Croix
-                            self.q1 = not self.q1
-                        elif event.code == ecodes.BTN_EAST: # Rond
-                            self.q2 = not self.q2
-                        elif event.code == ecodes.BTN_NORTH: # Triangle
-                            self.q3 = not self.q3
-                        elif event.code == ecodes.BTN_WEST: # Carré
-                            self.q4 = not self.q4
-                        elif event.code == ecodes.BTN_TR: # R1
-                            self.changeLEDindex()
-                        
-                        else:
-                            button_pressed = False
+        # Indice LED avec R1 (indice 5) : de 1 à 4
+        if msg.buttons[5] == 1 and self.last_buttons[5] == 0:
+        	if (current_time - self.last_led_time) >= 0.05:
+        		self.indiceLED = self.indiceLED + 1 if self.indiceLED < 4 else 1
+        		self.last_led_time=current_time
+        # Indice Vitesse avec Flèche HAUT (indice 7) : de 1 à 3
+        if len(msg.axes) >7 and len(self.last_axes) >7:
+            if msg.axes[7] > 0.5 and self.last_axes[7] == 0.0:
+            	if (current_time - self.last_speed_time) >= 0.05:
+            		self.indiceVitesse = self.indiceVitesse + 1 if self.indiceVitesse < 3 else 1
+            		self.last_speed_time=current_time
+            elif msg.axes[7] < -0.5 and self.last_axes[7] == 0.0: #screenshot
+            	if (current_time - self.last_screenshot_time) >= 0.05:
+            		self.get_logger().info("capture d'écran")
+            		msg_photo=Int8()
+            		msg_photo.data=1
+            		self.screenshot_pub.publish(msg_photo)
+            		self.last_screenshot_time=current_time
 
-                        if button_pressed == True:
-                            msgLED = LedControl()
-                            msgLED.intensity = int(self.indiceLED)
-                            msgLED.q1 = self.q1
-                            msgLED.q2 = self.q2
-                            msgLED.q3 = self.q3
-                            msgLED.q4 = self.q4
-                            #msgLED.is_red=self.is_red
-                        
-                            # --- AFFICHAGE VISUEL [X] [ ] ---
-                            s1 = "[X]" if self.q1 else "[ ]"
-                            s2 = "[X]" if self.q2 else "[ ]"
-                            s3 = "[X]" if self.q3 else "[ ]"
-                            s4 = "[X]" if self.q4 else "[ ]"
-                            #s5= "[RED]" if self.is_red else "[WHITE]"
-                                
-                            self.get_logger().info(f"STICK: x= {msg.x} y= {msg.y} | VIT: {msg.z} | LUM: {msgLED.intensity} | LED {s1}{s2}{s3}{s4}")
-                            
-                            # publication ROS                        
-                            self.publisherLED.publish(msgLED)
-                            
-                            
-                    # On continue la boucle pour ne pas traiter le bouton comme un axe
-                    continue 
-                
-                # --- BLOC DES AXES ---
-                abs_event = categorize(event)
-                axis = ecodes.ABS[abs_event.event.code]
-                value = abs_event.event.value
-                
-                if axis == "ABS_RX":
-                    if self.rx is None or difference(self.rx, value) >= 2:
-                        self.rx = value
-                        changed = True
+        # Préparation de l'affichage visuel des LEDs
+        s1 = "[X]" if self.q1 else "[ ]"
+        s2 = "[X]" if self.q2 else "[ ]"
+        s3 = "[X]" if self.q3 else "[ ]"
+        s4 = "[X]" if self.q4 else "[ ]"
 
-                elif axis == "ABS_Y":
-                    if self.ly is None or difference(self.ly, value) >= 2:
-                        self.ly = value
-                        changed = True
-                        
-                elif axis == "ABS_HAT0Y":
-                    if value != self.padOldState:
-                        if value == -1:  # Flèche HAUT
-                            self.changeSpeedIndex()
-                            changed = True 
 
-                        self.padOldState = value
-                #elif axis == "ABS_HAT0X":
-                    #if value != self.padOldStateX:
-                        #if value == -1:  # Flèche Gauche
-                            #self.is_red= not self.is_red
-                            #changed = True 
-                        #self.padOldStateX = value
-                        
-                # publication ros
-                if changed:
-                    msg = Vector3()
-                    # initialisation des valeurs à envoyer
-                    msg.x = float(self.rx)
-                    msg.y = float(self.ly)
-                    msg.z = float(self.indiceVitesse)
-                    # envoi et print du "message"
-                    self.publisher_.publish(msg)
-                    self.get_logger().info(f"STICK: x= {msg.x}, y= {msg.y} | VIT ={msg.z} ||")
+        # ENVOI DES COMMANDES SELON LE MODE
+        if (current_time - self.last_pub_time) >= 0.05:
+            if self.mode_tourelle:
+            	# --- MODE TOURELLE --
+            	tourelle_msg = Vector3()
+            	# Transformation de [-1.0 ; 1.0] vers [0 ; 255]
+            	# (On convertit en int() puis en float() pour avoir un 127 ou 255 propre sans décimales)
+            	val_pan=msg.axes[3]
+            	val_tilt=msg.axes[1]
+            	if abs(val_pan)<0.15:
+            		val_pan=0.0
+            	if abs(val_tilt)<0.15:
+            		val_tilt=0.0
+            	tourelle_msg.x = float(int((val_pan * 127.0) + 127.0))
+            	tourelle_msg.y = float(int((val_tilt * 127.0) + 127.0))
+            	tourelle_msg.z = float(self.indiceVitesse)
+            	self.tourelle_pub.publish(tourelle_msg)
+            	led_msg = LedControl()
+            	led_msg.intensity = int(self.indiceLED)
+            	led_msg.q1 = self.q1
+            	led_msg.q2 = self.q2
+            	led_msg.q3 = self.q3
+            	led_msg.q4 = self.q4
+            	self.led_pub.publish(led_msg)
+            	zoom_cmd=0
+            	if msg.buttons[4]:
+            		zoom_cmd=1
+            		self.get_logger().info(f"Zoom Activé")
+            	elif len(msg.axes)>2 and msg.axes[2] < 0.5:
+            		zoom_cmd=-1
+            		self.get_logger().info(f"Zoom Désactivé")
+            	msg_zoom=Int8()
+            	msg_zoom.data=zoom_cmd                    
+            	self.publisher_zoom.publish(msg_zoom)
+            	#affichage
+            	self.get_logger().info(f"TOURELLE PIPEEYE")
+            	self.get_logger().info(
+            		f"STICK G({(msg.axes[1]*127.0)+127.0:.2f}) "
+            	 	f"D({(msg.axes[3]*127.0)+127.0:.2f}) | "
+		        f"VIT: {self.indiceVitesse} | "
+		        f"LUM: {self.indiceLED} | LED {s1}{s2}{s3}{s4} "
+		)
+            else:	
+            	# --- MODE CONDUITE ---
+            	twist_msg = Twist()
+            	twist_msg.linear.x = self.linear_scale * msg.axes[1]  
+            	twist_msg.angular.z = self.angular_scale * msg.axes[3]
+            	self.cmd_vel_pub.publish(twist_msg)
+            	self.get_logger().info(f"CONDUITE ")
+            	self.get_logger().info(
+            	f"STICK G({msg.axes[0]:.2f}, {msg.axes[1]:.2f}) "
+            	f"D({msg.axes[3]:.2f}, {msg.axes[4]:.2f}) | "
+            	f"Vit. Moteur: {twist_msg.linear.x:.2f} | Rot: {twist_msg.angular.z:.2f} | "
+            	f"LED {s1}{s2}{s3}{s4} "
+            	)
+            self.last_pub_time=current_time
+            	
+	
 
-        except OSError as e:
-            self.get_logger().error(f"Erreur lors de la lecture de la manette : {e}")
-
+        # Mise à jour mémoire
+        self.last_buttons = list(msg.buttons)
+        self.last_axes = list(msg.axes)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = RightStickPublisher()
-    
+    master_node = MasterTeleopNode()
     try:
-        # Lance le processing des callbacks ROS2
-        rclpy.spin(node)
+        rclpy.spin(master_node)
     except KeyboardInterrupt:
-        # Message propre lors du Ctrl+C
-        node.get_logger().info("Arrêt du programme")
+        master_node.get_logger().info("Arrêt du programme")
     finally:
-        # Destruction du node et fermeture propre de ROS2
-        node.destroy_node()
+        master_node.destroy_node()
         rclpy.shutdown()
-        print("\nNode stick_publisher fermé")
-
 
 if __name__ == '__main__':
     main()
