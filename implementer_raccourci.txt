@@ -1,0 +1,108 @@
+Ce fichier aide à configurer les raccourcis qui in été crée et mentionnée dans le cadre du projet pipeeye. Si vous posséder déjà la raspberry d'origine les raccourcis ont déjà été crée vous pouvez passer à l'implémentation coté opérateur.
+
+SUR LA RASPBERRY PI DU ROBOT
+
+1. Configuration des IP Statiques (Netplan)
+Pour garantir une connexion Ethernet directe et stable sans nécessiter de routeur ou de serveur DHCP, des adresses IP statiques ont été définies sur les deux machines.
+Sur la Raspberry Pi du Robot (10.10.10.1) :
+
+sudo nano /etc/netplan/99-robot-static.yaml
+
+Remplacer le contenu par la configuration suivante (en s'assurant que le nom de l'interface Ethernet, ici eth0, correspond bien à la machine) :
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      dhcp4: no
+      addresses:
+        - 10.10.10.1/24
+      optional: true
+
+Appliquer la configuration : sudo netplan apply
+
+
+
+SUR LE POSTE OPERATEUR
+
+1. Configuration des IP Statiques (Netplan)
+Pour garantir une connexion Ethernet directe et stable sans nécessiter de routeur ou de serveur DHCP, des adresses IP statiques ont été définies sur les deux machines.
+Sur le poste opérateur (10.10.10.2) :
+
+sudo nano /etc/netplan/99-station-static.yaml
+
+Remplacer le contenu par la configuration suivante (en s'assurant que le nom de l'interface Ethernet, ici eth0, correspond bien à la machine) :
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      dhcp4: no
+      addresses:
+        - 10.10.10.2/24
+
+Appliquer la configuration : sudo netplan apply
+
+2. Raccourci de Connexion SSH (ssh pipeeye)
+Pour éviter de taper l'adresse IP complète à chaque connexion depuis le poste opérateur, un alias SSH a été configuré.
+Créer ou éditer le fichier de configuration SSH local :
+
+nano ~/.ssh/config
+
+Ajouter les lignes suivantes :
+
+Host pipeeye
+    HostName 10.10.10.1
+    User mathis
+
+Remplacer mathis par le nom d'utilisateur exact de la Raspberry Pi du robot si différent.
+
+Sauvegarder et quitter. La connexion s'effectue désormais simplement en tapant : ssh pipeeye
+
+3. Accès Graphique aux Fichiers (Protocole SFTP)
+Afin de pouvoir éditer les codes sources du robot directement depuis l'interface graphique du poste opérateur (sans passer par le terminal), un signet réseau a été créé.
+
+Ouvrir l'explorateur de fichiers 
+
+Cliquer sur "Autres emplacements" (Other Locations) dans la barre latérale gauche.
+
+Dans la barre "Se connecter à un serveur" en bas, taper : sftp://mathis@10.10.10.1/home/mathis
+(Remplacer mathis par le vrai nom du robot si différent)
+Saisir le mot de passe du robot.
+
+Une fois connecté, faire un clic droit sur le nouveau lecteur réseau apparu dans la barre latérale et sélectionner "Ajouter un signet". Le dossier du robot est désormais accessible en un clic.
+
+4. Raccourci de Lancement de la Manette (alias manette)
+Pour accélérer le déploiement du contrôle côté opérateur, une commande personnalisée a été ajoutée au terminal. Ouvrir le fichier de configuration du terminal :
+
+nano ~/.bashrc
+
+Aller tout à la fin du fichier et ajouter cette ligne :
+
+source /opt/ros/iron/setup.bash 
+if [-f/homme/pipeeye/ros2_ws/install/setup.bash];
+then
+    source /home/pipeeye/ros2_ws/install/setup.bash
+fi
+
+manette(){
+   cd home/pipeeye/ros2_ws
+   colcon build
+   if [ $? -eq 0];
+   then
+      echo "Lancement de la manette ..."
+      source install/setup.bash 
+      ros2 run manette_pkg manette
+   else
+      echo "Erreur lors de la compilation"
+   fi
+}
+
+
+Mettre à jour le terminal actuel pour prendre en compte la modification :
+
+source ~/.bashrc
+
+Il suffit maintenant de taper manette dans n'importe quel nouveau terminal pour lancer l'écoute du contrôleur PS4.
