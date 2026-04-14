@@ -46,6 +46,7 @@ cd ros2_ws
 
 (Le script se chargera de sourcer l'environnement et de lancer tous les nœuds ROS 2, y compris celui de la manette).
 
+
 Option 2 : Lancement à Distance (Connexion Ethernet / Poste Opérateur)
 
 C'est la configuration standard en conditions réelles. La manette est branchée sur le poste opérateur (seconde Raspberry Pi), qui communique avec le robot via un câble Ethernet.
@@ -70,3 +71,5 @@ cd ros2_ws
 Ouvrez un nouveau terminal local sur votre poste opérateur (celui où la manette est branchée) et lancez l'écoute de la manette via l'alias préconfiguré : manette
 
 Le système est désormais en ligne ! Vous pouvez ouvrir votre navigateur et vous rendre sur http://10.10.10.1:8081 pour avoir l'interface vidéo pour commencer l'inspection.
+
+Le package manette_pkg et le package contenant les fichier permettant de controler la manette, il est à mettre sur le poste operateur 
